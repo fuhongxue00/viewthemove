@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>物体运动可视化（简易）</title>
+    <style>
+        canvas {
+            border: 1px solid #000;
+            margin-top: 10px;
+        }
+        .object-input {
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        input[type="text"] {
+            width: 150px;
+        }
+        .axis-control {
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="axis-control">
+        <label>X轴范围：<input type="number" id="xMin" value="-10"> 到 
+              <input type="number" id="xMax" value="10"></label>
+        <label>Y轴范围：<input type="number" id="yMin" value="-10"> 到 
+              <input type="number" id="yMax" value="10"></label>
+    </div>
+    <div>
+        <label>物体数量：<input type="number" id="numObjects" min="1" value="1"></label>
+        <button onclick="createObjectInputs()">生成输入项</button>
+    </div>
+    <div id="objectInputs"></div>
+    <button onclick="startAnimation()" style="margin:10px">开始动画</button>
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <script>
+        let objects = [];
+        let animationId = null;
+        let t = 0;
+        let xRange = { min: -10, max: 10 };
+        let yRange = { min: -10, max: 10 };
+        let lastTimestamp = 0;
+
+        function createObjectInputs() {
+            const num = parseInt(document.getElementById('numObjects').value);
+            const container = document.getElementById('objectInputs');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < num; i++) {
+                container.innerHTML += `
+                    <div class="object-input">
+                        <h4>物体 ${i+1}</h4>
+                        <label>颜色：<input type="color" value="${getRandomColor()}"></label>
+                        <label>x(t) = <input type="text" class="x-func" value="5*cos(t)"></label>
+                        <label>y(t) = <input type="text" class="y-func" value="5*sin(t)"></label>
+                    </div>
+                `;
+            }
+        }
+
+        function getRandomColor() {
+            return '#' + Math.floor(Math.random()*16777215).toString(16);
+        }
+
+        function parseFunction(str) {
+            if (!str || str.trim() === '') {
+                alert("函数不能为空！");
+                return null;
+            }
+            try {
+                const wrappedStr = str
+                    .replace(/\b(sin|cos|tan|sqrt|log|pow|PI)\b/g, (match) => {
+                        if (match === 'PI') return 'Math.PI';
+                        return `Math.${match}`;
+                    });
+                return new Function('t', `return ${wrappedStr};`);
+            } catch (e) {
+                alert(`函数错误: ${str}\n${e.message}`);
+                return null;
+            }
+        }
+
+        function startAnimation() {
+            // 获取用户输入的坐标范围
+            const xMin = parseFloat(document.getElementById('xMin').value);
+            const xMax = parseFloat(document.getElementById('xMax').value);
+            const yMin = parseFloat(document.getElementById('yMin').value);
+            const yMax = parseFloat(document.getElementById('yMax').value);
+            
+            // 验证坐标范围有效性
+            if (isNaN(xMin) || isNaN(xMax) || xMin >= xMax) {
+                alert("X轴范围无效");
+                return;
+            }
+            if (isNaN(yMin) || isNaN(yMax) || yMin >= yMax) {
+                alert("Y轴范围无效");
+                return;
+            }
+            
+            xRange = { min: xMin, max: xMax };
+            yRange = { min: yMin, max: yMax };
+
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                t = 0;
+            }
+
+            objects = [];
+            const inputs = document.querySelectorAll('.object-input');
+            
+            inputs.forEach(input => {
+                const color = input.querySelector('input[type="color"]').value;
+                const xFunc = parseFunction(input.querySelector('.x-func').value);
+                const yFunc = parseFunction(input.querySelector('.y-func').value);
+                
+                if (xFunc && yFunc) {
+                    objects.push({ color, xFunc, yFunc });
+                }
+            });
+
+            if (objects.length > 0) {
+                lastTimestamp = 0;
+                animationId = requestAnimationFrame(animate);
+            }
+        }
+
+        function animate(timestamp) {
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const deltaTime = (timestamp - lastTimestamp) / 1000;
+            t += deltaTime;
+            lastTimestamp = timestamp;
+
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawCoordinateSystem(ctx);
+            
+            objects.forEach((obj, index) => {
+                try {
+                    const x = obj.xFunc(t);
+                    const y = obj.yFunc(t);
+                    const pos = convertToCanvas(x, y);
+                    
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 8, 0, Math.PI*2);
+                    ctx.fillStyle = obj.color;
+                    ctx.fill();
+                } catch (e) {
+                    console.error(`渲染物体${index+1} 失败:`, e);
+                }
+            });
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function convertToCanvas(x, y) {
+            const canvas = document.getElementById('canvas');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            const xScale = width / Math.max(xRange.max - xRange.min, 1);
+            const yScale = height / Math.max(yRange.max - yRange.min, 1);
+            
+            return {
+                x: (x - xRange.min) * xScale,
+                y: height - (y - yRange.min) * yScale
+            };
+        }
+
+        function drawCoordinateSystem(ctx) {
+            const canvas = document.getElementById('canvas');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // 绘制坐标轴
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+            
+            const xAxisY = convertToCanvas(0, 0).y;
+            ctx.beginPath();
+            ctx.moveTo(0, xAxisY);
+            ctx.lineTo(width, xAxisY);
+            ctx.stroke();
+
+            const yAxisX = convertToCanvas(0, 0).x;
+            ctx.beginPath();
+            ctx.moveTo(yAxisX, 0);
+            ctx.lineTo(yAxisX, height);
+            ctx.stroke();
+
+            // 绘制刻度标签
+            ctx.fillStyle = '#000';
+            ctx.font = '12px Arial';
+            
+            // X轴刻度
+            const xStep = calculateStep(xRange);
+            for (let x = xRange.min; x <= xRange.max; x += xStep) {
+                const pos = convertToCanvas(x, 0);
+                ctx.beginPath();
+                ctx.moveTo(pos.x, xAxisY - 5);
+                ctx.lineTo(pos.x, xAxisY + 5);
+                ctx.stroke();
+                ctx.fillText(x.toFixed(xStep < 1 ? 1 : 0), pos.x - 10, xAxisY + 20);
+            }
+
+            // Y轴刻度
+            const yStep = calculateStep(yRange);
+            for (let y = yRange.min; y <= yRange.max; y += yStep) {
+                const pos = convertToCanvas(0, y);
+                ctx.beginPath();
+                ctx.moveTo(yAxisX - 5, pos.y);
+                ctx.lineTo(yAxisX + 5, pos.y);
+                ctx.stroke();
+                ctx.fillText(y.toFixed(yStep < 1 ? 1 : 0), yAxisX + 10, pos.y + 5);
+            }
+        }
+
+        // 改进的步长计算函数
+        function calculateStep(range) {
+            const rangeSize = range.max - range.min;
+            if (rangeSize <= 0) return 1;
+            
+            // 计算基础步长（大约10个刻度）
+            let step = rangeSize / 10;
+            
+            // 将步长调整为更友好的数值
+            const exponent = Math.floor(Math.log10(step));
+            const factor = Math.pow(10, exponent);
+            const normalized = step / factor;
+            
+            // 优化步长到1、2或5的倍数
+            if (normalized < 1.5) return 1 * factor;
+            if (normalized < 3) return 2 * factor;
+            if (normalized < 7) return 5 * factor;
+            return 10 * factor;
+        }
+
+        createObjectInputs();
+    </script>
+</body>
+</html>
