@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三人追赶运动可视化（不准确）</title>
+    <style>
+        canvas {
+            border: 1px solid #000;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>三人追赶运动可视化（不准确）</h1>
+    <button onclick="startAnimation()" style="margin:10px">开始动画</button>
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <script>
+        let t = 0;
+        let animationId = null;
+
+        // 初始位置设置：A(0,0), B(L, 0), C(L/2, sqrt(3) * L/2)
+        let A = { x: -5, y: -5/Math.sqrt(3) };
+        let B = { x: 5, y: -5/Math.sqrt(3) };
+        let C = { x: 0, y: Math.sqrt(3) * 5-5/Math.sqrt(3) };
+
+        // 速度：v = 1，单位时间
+        const v = 1;
+        const dt = 0.01; // 时间步长
+
+        const L = 10;  // 边长
+
+        // 画布尺寸
+        const canvasWidth = 800;
+        const canvasHeight = 600;
+
+        // 计算方向向量
+        function calculateDirection(from, to) {
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const magnitude = Math.sqrt(dx * dx + dy * dy);
+            return { x: dx / magnitude, y: dy / magnitude };
+        }
+
+        // 更新位置函数
+        function updatePositions() {
+            const directionAB = calculateDirection(A, B);
+            const directionBC = calculateDirection(B, C);
+            const directionCA = calculateDirection(C, A);
+
+            A.x += directionAB.x * v * dt;
+            A.y += directionAB.y * v * dt;
+            B.x += directionBC.x * v * dt;
+            B.y += directionBC.y * v * dt;
+            C.x += directionCA.x * v * dt;
+            C.y += directionCA.y * v * dt;
+        }
+
+        // 绘制坐标系
+        function drawCoordinateSystem(ctx) {
+            const width = ctx.canvas.width;
+            const height = ctx.canvas.height;
+            
+            // X轴和Y轴
+            ctx.beginPath();
+            ctx.moveTo(0, height / 2);
+            ctx.lineTo(width, height / 2);
+            ctx.moveTo(width / 2, 0);
+            ctx.lineTo(width / 2, height);
+            ctx.stroke();
+        }
+
+        // 绘制运动轨迹
+        function draw() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
+
+            drawCoordinateSystem(ctx);
+
+            // 绘制三个人的位置
+            ctx.beginPath();
+            ctx.arc(A.x * 50 + canvasWidth / 2, -A.y * 50 + canvasHeight / 2, 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(B.x * 50 + canvasWidth / 2, -B.y * 50 + canvasHeight / 2, 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'green';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(C.x * 50 + canvasWidth / 2, -C.y * 50 + canvasHeight / 2, 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'blue';
+            ctx.fill();
+        }
+
+        // 开始动画
+        function startAnimation() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                t = 0;
+            }
+
+            function animate() {
+                updatePositions();
+                draw();
+                t += dt;
+                animationId = requestAnimationFrame(animate);
+            }
+
+            animate();
+        }
+    </script>
+</body>
+</html>
